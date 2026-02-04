@@ -25,6 +25,9 @@ interface Tentpole {
   date: Date
   category: TentpoleCategory
   description?: string
+  isRecurring?: boolean
+  relatedTopics?: string[]
+  relatedArtists?: string[]
 }
 
 interface TentpoleCalendarProps {

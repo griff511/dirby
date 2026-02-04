@@ -16,9 +16,9 @@ interface Tentpole {
   date: Date
   category: TentpoleCategory
   description?: string
-  isRecurring: boolean
-  relatedTopics: string[]
-  relatedArtists: string[]
+  isRecurring?: boolean
+  relatedTopics?: string[]
+  relatedArtists?: string[]
 }
 
 interface TentpolesResponse {
@@ -315,7 +315,7 @@ export default function CalendarPage() {
                 </p>
               </div>
 
-              {selectedTentpole.relatedTopics.length > 0 && (
+              {selectedTentpole.relatedTopics && selectedTentpole.relatedTopics.length > 0 && (
                 <div>
                   <p className="mb-2 text-sm text-zinc-500">Related Topics</p>
                   <div className="flex flex-wrap gap-2">
@@ -328,7 +328,7 @@ export default function CalendarPage() {
                 </div>
               )}
 
-              {selectedTentpole.relatedArtists.length > 0 && (
+              {selectedTentpole.relatedArtists && selectedTentpole.relatedArtists.length > 0 && (
                 <div>
                   <p className="mb-2 text-sm text-zinc-500">Related Artists</p>
                   <div className="flex flex-wrap gap-2">

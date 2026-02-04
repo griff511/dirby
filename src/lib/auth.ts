@@ -115,9 +115,9 @@ export function canEditTentpoles(role: UserRole): boolean {
 }
 
 export function canSuggestReposts(role: UserRole): boolean {
-  return [UserRole.ADMIN, UserRole.BRAND_LEAD, UserRole.EDITOR].includes(role)
+  return role === UserRole.ADMIN || role === UserRole.BRAND_LEAD || role === UserRole.EDITOR
 }
 
 export function canExportData(role: UserRole): boolean {
-  return [UserRole.ADMIN, UserRole.BRAND_LEAD, UserRole.EDITOR].includes(role)
+  return role === UserRole.ADMIN || role === UserRole.BRAND_LEAD || role === UserRole.EDITOR
 }

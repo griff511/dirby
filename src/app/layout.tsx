@@ -1,15 +1,12 @@
 import type { Metadata } from 'next'
-import { Inter } from 'next/font/google'
 import './globals.css'
 import { Navbar } from '@/components/layout/navbar'
 import { Providers } from './providers'
 
-const inter = Inter({ subsets: ['latin'] })
-
 export const metadata: Metadata = {
   title: 'Social Intelligence Platform',
   description:
-    'Internal content memory for Low Battery\'s content team - search, analyze, and resurface historical posts across 45M+ followers.',
+    "Internal content memory for Low Battery's content team - search, analyze, and resurface historical posts across 45M+ followers.",
 }
 
 export default function RootLayout({
@@ -19,7 +16,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`${inter.className} antialiased`}>
+      <body className="font-sans antialiased">
         <Providers>
           <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
             <Navbar />
