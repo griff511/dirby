@@ -1,0 +1,420 @@
+// Social Intelligence Platform Database Schema
+// For Low Battery's content team managing RapTV, Bars, PopHive, Controller, etc.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ============================================
+// User & Authentication Models
+// ============================================
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String?
+  image         String?
+  role          UserRole  @default(EDITOR)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Relations
+  accounts      Account[]
+  sessions      Session[]
+  brandAccess   UserBrandAccess[]
+  auditLogs     AuditLog[]
+  savedSearches SavedSearch[]
+  repostQueue   RepostQueue[]
+
+  @@map("users")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+enum UserRole {
+  ADMIN       // Full access, can manage users, edit tentpoles
+  BRAND_LEAD  // Full access to their brand(s), read access to others
+  EDITOR      // Search, view, suggest reposts
+  VIEWER      // Read-only access
+}
+
+model UserBrandAccess {
+  id      String @id @default(cuid())
+  userId  String
+  brandId String
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  brand Brand @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, brandId])
+  @@map("user_brand_access")
+}
+
+// ============================================
+// Brand & Platform Models
+// ============================================
+
+model Brand {
+  id          String   @id @default(cuid())
+  name        String   @unique  // e.g., "RapTV", "Bars", "PopHive", "Controller"
+  slug        String   @unique  // e.g., "raptv", "bars", "pophive", "controller"
+  description String?
+  logoUrl     String?
+  color       String?  // Brand color for UI
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  socialAccounts SocialAccount[]
+  posts          Post[]
+  userAccess     UserBrandAccess[]
+
+  @@map("brands")
+}
+
+model SocialAccount {
+  id              String    @id @default(cuid())
+  brandId         String
+  platform        Platform
+  platformUserId  String    // Platform-specific user ID
+  username        String    // @handle
+  displayName     String?
+  profileUrl      String?
+  followerCount   Int       @default(0)
+  isActive        Boolean   @default(true)
+  accessToken     String?   @db.Text  // Encrypted
+  refreshToken    String?   @db.Text  // Encrypted
+  tokenExpiresAt  DateTime?
+  lastSyncAt      DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  // Relations
+  brand           Brand     @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  posts           Post[]
+  followerHistory FollowerHistory[]
+
+  @@unique([platform, platformUserId])
+  @@map("social_accounts")
+}
+
+model FollowerHistory {
+  id              String   @id @default(cuid())
+  socialAccountId String
+  followerCount   Int
+  recordedAt      DateTime @default(now())
+
+  socialAccount SocialAccount @relation(fields: [socialAccountId], references: [id], onDelete: Cascade)
+
+  @@map("follower_history")
+}
+
+enum Platform {
+  INSTAGRAM
+  TIKTOK
+  TWITTER
+  YOUTUBE
+  FACEBOOK
+  SNAPCHAT
+}
+
+// ============================================
+// Post Models
+// ============================================
+
+model Post {
+  id              String      @id @default(cuid())
+  externalId      String      // Platform's post ID
+  platform        Platform
+  brandId         String
+  socialAccountId String
+  contentType     ContentType
+
+  // Content
+  captionText     String?     @db.Text
+  hashtags        String[]    // Array of hashtags
+  mentions        String[]    // Array of @mentions
+  mediaUrls       String[]    // Array of media URLs
+  thumbnailUrl    String?
+  permalink       String?     // Direct link to the post
+
+  // Timing
+  publishedAt     DateTime
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  // Engagement Metrics (stored as JSON for flexibility)
+  views           BigInt      @default(0)
+  likes           BigInt      @default(0)
+  comments        BigInt      @default(0)
+  shares          BigInt      @default(0)
+  saves           BigInt      @default(0)
+  engagementRate  Float       @default(0)  // Calculated: (likes + comments + shares) / followers * 100
+
+  // Viral Analysis
+  viralScore      Float       @default(0)  // Calculated composite score
+  firstDayViews   BigInt      @default(0)  // Views in first 24 hours
+  firstDayEngagement BigInt   @default(0)  // Engagement in first 24 hours
+
+  // AI-Extracted Metadata
+  topics          String[]    // AI-extracted topics
+  artists         String[]    // AI-extracted artist mentions
+  sentiment       Sentiment?  // AI-extracted sentiment
+  aiProcessedAt   DateTime?   // When AI processing was last run
+
+  // Flags
+  isEvergreen     Boolean     @default(false)  // Marked for easy resurfacing
+  isDeleted       Boolean     @default(false)  // Soft delete flag
+
+  // Relations
+  brand           Brand       @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  socialAccount   SocialAccount @relation(fields: [socialAccountId], references: [id], onDelete: Cascade)
+  tentpoleLinks   PostTentpole[]
+  metricsHistory  PostMetricsHistory[]
+  repostQueue     RepostQueue[]
+
+  @@unique([platform, externalId])
+  @@index([brandId])
+  @@index([platform])
+  @@index([publishedAt])
+  @@index([viralScore])
+  @@index([captionText])  // For full-text search
+  @@map("posts")
+}
+
+model PostMetricsHistory {
+  id        String   @id @default(cuid())
+  postId    String
+  views     BigInt
+  likes     BigInt
+  comments  BigInt
+  shares    BigInt
+  saves     BigInt
+  recordedAt DateTime @default(now())
+
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@map("post_metrics_history")
+}
+
+enum ContentType {
+  IMAGE
+  VIDEO
+  CAROUSEL
+  REEL
+  STORY
+  SHORT
+  THREAD
+  LIVE
+}
+
+enum Sentiment {
+  POSITIVE
+  NEGATIVE
+  NEUTRAL
+  MIXED
+}
+
+// ============================================
+// Tentpole Models
+// ============================================
+
+model Tentpole {
+  id                String            @id @default(cuid())
+  name              String
+  description       String?
+  category          TentpoleCategory
+  date              DateTime          // The specific date (or start date for ranges)
+  endDate           DateTime?         // For multi-day events
+  isRecurring       Boolean           @default(false)
+  recurrencePattern String?           // e.g., "YEARLY", "MONTHLY"
+  relatedTopics     String[]
+  relatedArtists    String[]
+  imageUrl          String?
+  isActive          Boolean           @default(true)
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  // Relations
+  postLinks         PostTentpole[]
+
+  @@index([date])
+  @@index([category])
+  @@map("tentpoles")
+}
+
+model PostTentpole {
+  id            String   @id @default(cuid())
+  postId        String
+  tentpoleId    String
+  relevanceScore Float   @default(0)  // How relevant the post is to the tentpole
+
+  post      Post      @relation(fields: [postId], references: [id], onDelete: Cascade)
+  tentpole  Tentpole  @relation(fields: [tentpoleId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, tentpoleId])
+  @@map("post_tentpoles")
+}
+
+enum TentpoleCategory {
+  AWARDS_SHOW     // Grammys, BET Awards, VMAs, AMAs
+  SPORTS          // Super Bowl, NBA Finals, FIFA World Cup
+  CULTURAL        // Black History Month, Hispanic Heritage Month
+  MUSIC_INDUSTRY  // Album anniversaries, artist birthdays, death anniversaries
+  HOLIDAY         // Major holidays
+  CUSTOM          // User-created tentpoles
+}
+
+// ============================================
+// Feature Models
+// ============================================
+
+model SavedSearch {
+  id          String   @id @default(cuid())
+  userId      String
+  name        String
+  filters     Json     // Store the search filters as JSON
+  createdAt   DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("saved_searches")
+}
+
+model RepostQueue {
+  id            String       @id @default(cuid())
+  postId        String
+  userId        String
+  status        RepostStatus @default(QUEUED)
+  scheduledFor  DateTime?
+  notes         String?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("repost_queue")
+}
+
+enum RepostStatus {
+  QUEUED
+  SCHEDULED
+  POSTED
+  CANCELLED
+}
+
+// ============================================
+// System Models
+// ============================================
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String
+  action     String   // e.g., "SEARCH", "VIEW_POST", "EXPORT", "CREATE_TENTPOLE"
+  resource   String?  // e.g., "post", "tentpole"
+  resourceId String?
+  metadata   Json?    // Additional context
+  ipAddress  String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+model SyncJob {
+  id            String    @id @default(cuid())
+  type          String    // e.g., "INSTAGRAM_SYNC", "TIKTOK_SYNC"
+  status        SyncStatus @default(PENDING)
+  startedAt     DateTime?
+  completedAt   DateTime?
+  error         String?   @db.Text
+  metadata      Json?     // Job-specific data
+  createdAt     DateTime  @default(now())
+
+  @@index([status])
+  @@index([createdAt])
+  @@map("sync_jobs")
+}
+
+enum SyncStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+// ============================================
+// AI Processing Models
+// ============================================
+
+model TopicDictionary {
+  id          String   @id @default(cuid())
+  topic       String   @unique
+  aliases     String[] // Alternative names/spellings
+  category    String?  // e.g., "artist", "genre", "event"
+  count       Int      @default(0)  // Number of posts with this topic
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("topic_dictionary")
+}
+
+model ArtistDictionary {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  aliases     String[] // Stage names, nicknames
+  genres      String[]
+  imageUrl    String?
+  postCount   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("artist_dictionary")
+}
